@@ -1,0 +1,2116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FOUNDATION UNIVERSITY | ROTC ATTENDANCE SYSTEM</title>
+    
+    <!-- CSS Frameworks & Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- SheetJS (XLSX) for Excel Import/Export capability -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-app-compat.js"></script>   
+    <script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-database-compat.js"></script>
+
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        tactical: {
+                            black: '#0E1409',      // Deepest background
+                            card: '#141A0D',       // Card background
+                            border: '#1C2412',     // Subtle border accent
+                            gray: '#2C3520',       // Interactive state backgrounds
+                            green: '#6AAB3A',      // Primary tactical green
+                            greenHover: '#5A9431', // Hover state green
+                            khaki: '#8B8C6E',      // Khaki accent/secondary info
+                            text: '#EDF2E6',       // Main text
+                            textMuted: '#9BA88F',  // Subtext
+                            alertRed: '#C0392B',   // Dangerous/Invalid actions
+                            alertGreen: '#1E824C'  // Successful actions
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        stencil: ['Rajdhani', 'sans-serif'],
+                        mono: ['IBM Plex Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0E1409;
+            color: #EDF2E6;
+            overflow-x: hidden;
+        }
+        
+        /* Custom Military Styled Elements */
+        .stencil-text {
+            font-family: 'Rajdhani', sans-serif;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+        
+        .glow-green {
+            box-shadow: 0 0 15px rgba(106, 171, 58, 0.25);
+        }
+        
+        .glow-red {
+            box-shadow: 0 0 15px rgba(192, 57, 43, 0.4);
+        }
+        
+        /* Scanner scan line effect */
+        .scanner-card::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #6AAB3A, transparent);
+            top: 0;
+            left: 0;
+            animation: scan 3s linear infinite;
+            z-index: 10;
+        }
+        
+        @keyframes scan {
+            0% { top: 0%; }
+            50% { top: 100%; }
+            100% { top: 0%; }
+        }
+
+        /* Custom Scrollbar for Tactical Vibe */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0E1409;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2C3520;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6AAB3A;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <!-- TOP SYSTEM NOTIFICATION POPUP -->
+    <div id="systemNotification" class="fixed top-0 left-0 right-0 z-50 transform -translate-y-full transition-transform duration-300 ease-in-out px-4 py-3 flex items-center justify-between shadow-2xl">
+        <div class="flex items-center gap-3">
+            <span id="notifIcon" class="text-xl"></span>
+            <div>
+                <p id="notifTitle" class="font-bold stencil-text text-sm tracking-wider"></p>
+                <p id="notifMsg" class="text-xs font-mono"></p>
+            </div>
+        </div>
+        <button onclick="closeNotification()" class="text-white hover:text-opacity-80 font-bold px-2 py-1">✕</button>
+    </div>
+
+    <!-- MAIN APP SCREEN CONTAINERS -->
+
+    <!-- SCREEN 1: ATTENDANCE SCANNER PAGE -->
+    <div id="attendancePage" class="flex-grow flex flex-col items-center justify-center p-4">
+        
+        <!-- HEADER branding -->
+        <div class="text-center mb-6">
+            <div class="flex justify-center items-center gap-3 mb-2">
+                <i class="fa-solid fa-shield-halved text-4xl text-tactical-green"></i>
+                <div class="text-left">
+                    <h1 class="text-3xl font-black tracking-widest text-tactical-text stencil-text">FOUNDATION UNIVERSITY</h1>
+                    <p class="text-xs text-tactical-khaki font-semibold tracking-wider font-mono">DEPARTMENT OF MILITARY SCIENCE & TACTICS • ROTC UNIT</p>
+                </div>
+            </div>
+            <div class="border-y border-tactical-border py-1 inline-block px-12 mt-2">
+                <span class="text-sm font-bold text-tactical-green tracking-[0.3em] font-mono">ROTC ATTENDANCE SYSTEM</span>
+            </div>
+        </div>
+
+        <!-- MAIN SCANNING AND TIME CARD -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-5xl">
+            
+            <!-- LEFT: Digital Clock / Cadet Info Preview -->
+            <div class="lg:col-span-5 bg-tactical-card border border-tactical-border rounded-lg p-6 flex flex-col justify-between relative overflow-hidden">
+                <div class="border-b border-tactical-border pb-4 mb-4">
+                    <span class="text-xs font-mono text-tactical-khaki">CURRENT STATION DATE & TIME</span>
+                    <div id="liveClock" class="text-4xl font-bold font-mono text-tactical-green mt-1 tracking-wide">00:00:00 PM</div>
+                    <div id="liveDate" class="text-xs font-mono text-tactical-textMuted uppercase mt-1">SUNDAY, JUNE 14, 2026</div>
+                </div>
+
+                <!-- Live lookup visual panel -->
+                <div class="flex-grow flex flex-col justify-center py-4">
+                    <span class="text-[10px] font-mono text-tactical-khaki mb-2 block tracking-wider uppercase">CADET BIO-IDENTIFICATION PREVIEW</span>
+                    <div id="cadetPreviewCard" class="bg-tactical-black border border-tactical-border rounded p-4 flex items-center gap-4 transition-all duration-300">
+                        <div class="w-16 h-16 rounded bg-tactical-gray border border-tactical-border flex items-center justify-center flex-shrink-0 text-tactical-khaki">
+                            <i id="previewAvatar" class="fa-solid fa-user-shield text-2xl"></i>
+                        </div>
+                        <div class="overflow-hidden">
+                            <p id="previewName" class="font-bold text-tactical-text truncate tracking-wide">ENTER ID TO VERIFY</p>
+                            <p id="previewID" class="text-xs font-mono text-tactical-textMuted mt-0.5">ID: ——————</p>
+                            <span id="previewCompany" class="mt-2 inline-block px-2 py-0.5 bg-tactical-gray text-[10px] font-mono rounded text-tactical-khaki uppercase border border-tactical-border">
+                                PLATOON: —
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-tactical-border text-[10px] font-mono text-tactical-textMuted flex justify-between items-center">
+                    <span>SECURITY ACTIVE</span>
+                    <span id="cloudStatusText" class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-cloud-arrow-up text-tactical-khaki"></i> CONNECTING...
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-tactical-green animate-pulse"></span> STATION ONLINE
+                    </span>
+                </div>
+            </div>
+
+            <!-- RIGHT: Active Scanner / ID Input -->
+            <div class="lg:col-span-7 bg-tactical-card border border-tactical-border rounded-lg p-6 flex flex-col justify-between relative scanner-card overflow-hidden">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xs font-mono text-tactical-khaki">SECURE ATTENDANCE PORTAL</span>
+                        <span class="text-[10px] font-mono bg-tactical-gray px-2 py-0.5 rounded text-tactical-green border border-tactical-border">VERIFICATION REQD</span>
+                    </div>
+
+                    <p class="text-sm text-tactical-textMuted mb-6 leading-relaxed">
+                        Insert or key in your assigned Cadet Identification Number below. The system checks database records for validity before documenting secure daily muster credit.
+                    </p>
+
+                    <form id="attendanceForm" onsubmit="handleAttendanceSubmit(event)" class="space-y-4">
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-tactical-khaki">
+                                <i class="fa-solid fa-id-card text-lg"></i>
+                            </span>
+                            <input 
+                                type="text" 
+                                id="cadetIdInput" 
+                                placeholder="CADET ID NUMBER" 
+                                class="w-full bg-tactical-black border-2 border-tactical-border focus:border-tactical-green text-tactical-text placeholder-tactical-gray font-mono font-bold tracking-widest pl-11 pr-4 py-4 rounded-md focus:outline-none focus:ring-0 text-xl transition-all uppercase"
+                                oninput="handleIdInputChange(this.value)"
+                                autofocus
+                                autocomplete="off"
+                            >
+                        </div>
+                        <button 
+                            type="submit" 
+                            class="w-full bg-tactical-green hover:bg-tactical-greenHover text-tactical-black font-extrabold py-4 rounded-md stencil-text tracking-widest text-lg transition-all flex items-center justify-center gap-2 shadow-lg"
+                        >
+                            <i class="fa-solid fa-fingerprint text-xl"></i> SECURE ATTENDANCE
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Recent Logs list under screen 1 -->
+                <div class="mt-8">
+                    <span class="text-[10px] font-mono text-tactical-khaki block mb-2 tracking-wider">RECENT COMPLETED SECURE LOGS (SESSION)</span>
+                    <div id="sessionLogContainer" class="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+                        <!-- Filled by JS -->
+                        <p class="text-xs font-mono text-tactical-gray text-center py-4 border border-dashed border-tactical-border rounded">No transactions logged yet this session.</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- FOOTER / ADMIN ACCESSIBILITY -->
+        <div class="mt-12 text-center">
+            <p class="text-xs font-mono text-tactical-khaki uppercase mb-4">"SERVICE BEFORE SELF"</p>
+            <button 
+                onclick="transitionToScreen('adminLoginPage')" 
+                class="bg-tactical-card border border-tactical-border hover:bg-tactical-gray text-tactical-textMuted hover:text-tactical-green px-6 py-2.5 rounded text-xs font-mono tracking-wider transition-all inline-flex items-center gap-2 uppercase"
+            >
+                <i class="fa-solid fa-lock-open text-xs"></i> Officer / Admin Login
+            </button>
+        </div>
+    </div>
+
+
+    <!-- SCREEN 2: ADMIN LOGIN -->
+    <div id="adminLoginPage" class="hidden flex-grow flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-md bg-tactical-card border border-tactical-border rounded-lg p-8 shadow-2xl relative">
+            <button 
+                onclick="transitionToScreen('attendancePage')" 
+                class="absolute top-4 left-4 text-tactical-textMuted hover:text-tactical-text text-sm font-mono flex items-center gap-1 transition-all"
+            >
+                <i class="fa-solid fa-arrow-left"></i> BACK
+            </button>
+
+            <div class="text-center mt-4 mb-8">
+                <i class="fa-solid fa-user-shield text-4xl text-tactical-green mb-3"></i>
+                <h2 class="text-xl font-bold tracking-wider stencil-text text-tactical-text">ROTC ADMIN ACCESS</h2>
+                <p class="text-xs font-mono text-tactical-khaki mt-1">SECURE COMMISSIONED OFFICER AUTHORIZATION</p>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-mono text-tactical-khaki uppercase mb-1.5 tracking-wider">OFFICER USERNAME</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-tactical-khaki">
+                            <i class="fa-solid fa-user-large text-sm"></i>
+                        </span>
+                        <input 
+                            type="text" 
+                            id="loginUsername" 
+                            required 
+                            class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono pl-10 pr-4 py-3 rounded focus:outline-none transition-all text-sm"
+                            placeholder="Enter username"
+                            autocomplete="off"
+                        >
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-mono text-tactical-khaki uppercase mb-1.5 tracking-wider">SECRET PASSCODE</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-tactical-khaki">
+                            <i class="fa-solid fa-key text-sm"></i>
+                        </span>
+                        <input 
+                            type="password" 
+                            id="loginPassword" 
+                            required 
+                            class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono pl-10 pr-4 py-3 rounded focus:outline-none transition-all text-sm"
+                            placeholder="••••••••"
+                        >
+                    </div>
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="w-full bg-tactical-green hover:bg-tactical-greenHover text-tactical-black font-extrabold py-3.5 rounded stencil-text tracking-widest text-sm transition-all flex items-center justify-center gap-2 mt-4"
+                >
+                    <i class="fa-solid fa-shield-halved"></i> SECURE VERIFY
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <span class="text-[10px] font-mono text-tactical-gray">STATION ENCRYPTION MODE: AES-256</span>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- SCREEN 3: ADMIN DASHBOARD PAGE -->
+    <div id="adminDashboardPage" class="hidden flex-grow flex flex-col">
+        
+        <!-- DASHBOARD NAVIGATION HEADER -->
+        <header class="bg-tactical-card border-b border-tactical-border px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-house-chimney-crack text-2xl text-tactical-green"></i>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-lg font-bold stencil-text text-tactical-text tracking-widest">FU ROTC ADMIN SYSTEM</h2>
+                        <span class="bg-tactical-green text-tactical-black font-mono text-[9px] font-black px-1.5 py-0.5 rounded uppercase">HQ DEPLOYED</span>
+                    </div>
+                    <p class="text-xs font-mono text-tactical-khaki">COMMANDING OFFICER: <span id="displayOfficerName" class="text-tactical-text font-bold">CPT. JUAN DELA CRUZ</span></p>
+                </div>
+            </div>
+
+            <!-- Dashboard controls -->
+            <div class="flex items-center gap-3">
+                <span id="dashCloudStatusText" class="text-xs font-mono text-tactical-khaki bg-tactical-black border border-tactical-border px-3 py-2 rounded flex items-center gap-1.5">
+                    <i class="fa-solid fa-cloud-arrow-up text-tactical-khaki"></i> CONNECTING...
+                </span>
+                <button 
+                    onclick="handleLogout()" 
+                    class="bg-tactical-alertRed bg-opacity-20 border border-tactical-alertRed hover:bg-opacity-100 text-tactical-text hover:text-tactical-black text-xs font-mono px-4 py-2 rounded transition-all flex items-center gap-2 uppercase font-semibold"
+                >
+                    <i class="fa-solid fa-right-from-bracket"></i> End Session
+                </button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD SUB CONTENT -->
+        <div class="p-6 flex-grow flex flex-col gap-6 max-w-7xl w-full mx-auto">
+            
+            <!-- STATS COUNTERS PANEL -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-tactical-card border border-tactical-border rounded p-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-mono text-tactical-khaki block uppercase">Total secure logs</span>
+                        <span id="statTotalLogs" class="text-2xl font-bold font-mono text-tactical-text">0</span>
+                    </div>
+                    <i class="fa-solid fa-fingerprint text-2xl text-tactical-gray"></i>
+                </div>
+                <div class="bg-tactical-card border border-tactical-border rounded p-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-mono text-tactical-khaki block uppercase">TODAY MUSTER</span>
+                        <span id="statTodayLogs" class="text-2xl font-bold font-mono text-tactical-green">0</span>
+                    </div>
+                    <i class="fa-solid fa-calendar-day text-2xl text-tactical-gray"></i>
+                </div>
+                <div class="bg-tactical-card border border-tactical-border rounded p-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-mono text-tactical-khaki block uppercase">ENROLLED CADETS</span>
+                        <span id="statTotalCadets" class="text-2xl font-bold font-mono text-tactical-text">0</span>
+                    </div>
+                    <i class="fa-solid fa-users-viewfinder text-2xl text-tactical-gray"></i>
+                </div>
+                <div class="bg-tactical-card border border-tactical-border rounded p-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-mono text-tactical-khaki block uppercase">COMPANIES ACTIVE</span>
+                        <span id="statActiveCompanies" class="text-2xl font-bold font-mono text-tactical-text">4</span>
+                    </div>
+                    <i class="fa-solid fa-building-shield text-2xl text-tactical-gray"></i>
+                </div>
+            </div>
+
+            <!-- TAB CONTROLLER -->
+            <div class="flex border-b border-tactical-border gap-2">
+                <button 
+                    onclick="switchTab('tabAttendance')" 
+                    id="btnTabAttendance" 
+                    class="px-6 py-3 font-semibold text-xs tracking-wider stencil-text border-b-2 border-tactical-green text-tactical-green flex items-center gap-2 transition-all"
+                >
+                    <i class="fa-solid fa-file-invoice"></i> ATTENDANCE LEDGER
+                </button>
+                <button 
+                    onclick="switchTab('tabCadetRoster')" 
+                    id="btnTabCadetRoster" 
+                    class="px-6 py-3 font-semibold text-xs tracking-wider stencil-text border-b-2 border-transparent text-tactical-textMuted hover:text-tactical-text flex items-center gap-2 transition-all"
+                >
+                    <i class="fa-solid fa-address-book"></i> REGIMENTAL CADET ROSTER
+                </button>
+                <button 
+                    onclick="switchTab('tabSettings')" 
+                    id="btnTabSettings" 
+                    class="px-6 py-3 font-semibold text-xs tracking-wider stencil-text border-b-2 border-transparent text-tactical-textMuted hover:text-tactical-text flex items-center gap-2 transition-all"
+                >
+                    <i class="fa-solid fa-sliders"></i> SECURE SYSTEM SETTINGS
+                </button>
+            </div>
+
+            <!-- TAB 1 CONTENT: ATTENDANCE LEDGER -->
+            <div id="tabAttendance" class="tab-content flex-grow flex flex-col gap-4">
+                
+                <!-- Filters / Search Header -->
+                <div class="bg-tactical-card border border-tactical-border rounded p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <div class="relative flex-grow sm:flex-grow-0 sm:w-64">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-tactical-khaki">
+                                <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                            </span>
+                            <input 
+                                type="text" 
+                                id="searchAttendanceInput" 
+                                oninput="loadAttendanceTable()"
+                                placeholder="Search Name or ID..." 
+                                class="w-full bg-tactical-black border border-tactical-border text-tactical-text font-mono text-xs pl-9 pr-3 py-2 rounded focus:outline-none focus:border-tactical-green placeholder-tactical-gray"
+                            >
+                        </div>
+                        <select 
+                            id="filterCompanySelect" 
+                            onchange="loadAttendanceTable()"
+                            class="bg-tactical-black border border-tactical-border text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none focus:border-tactical-green"
+                        >
+                            <option value="ALL">ALL COMPANIES</option>
+                            <option value="ALPHA">ALPHA COMPANY</option>
+                            <option value="BRAVO">BRAVO COMPANY</option>
+                            <option value="CHARLIE">CHARLIE COMPANY</option>
+                            <option value="HQ">HQ / SPECIAL</option>
+                        </select>
+                        <select 
+                            id="filterUnitSelect" 
+                            onchange="loadAttendanceTable()"
+                            class="bg-tactical-black border border-tactical-border text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none focus:border-tactical-green"
+                        >
+                            <option value="ALL">ALL UNITS/PLATOONS</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                        <button 
+                            onclick="exportAttendanceCSV()" 
+                            class="bg-tactical-gray hover:bg-tactical-green hover:text-tactical-black text-tactical-text text-xs font-mono px-4 py-2 rounded border border-tactical-border transition-all flex items-center gap-2"
+                        >
+                            <i class="fa-solid fa-file-export"></i> EXPORT CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ledger Table Box -->
+                <div class="bg-tactical-card border border-tactical-border rounded flex-grow flex flex-col overflow-hidden max-h-[500px]">
+                    <div class="overflow-x-auto flex-grow">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-tactical-black text-tactical-khaki font-mono text-[11px] uppercase border-b border-tactical-border sticky top-0 z-10">
+                                    <th class="py-3 px-4">CADET ID</th>
+                                    <th class="py-3 px-4">CADET NAME</th>
+                                    <th class="py-3 px-4">COMPANY / UNIT</th>
+                                    <th class="py-3 px-4 text-center">STAMPED DATE</th>
+                                    <th class="py-3 px-4 text-center">STAMPED TIME</th>
+                                    <th class="py-3 px-4 text-center">STATUS</th>
+                                    <th class="py-3 px-4 text-right">ACTION</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTableBody" class="divide-y divide-tactical-border text-xs font-mono">
+                                <!-- Generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 2 CONTENT: CADET ROSTER MANAGER -->
+            <div id="tabCadetRoster" class="tab-content hidden flex-grow flex flex-col gap-6">
+                
+                <!-- Regimental Roster action panel -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    <!-- Left Column: Add / Edit Cadet Form -->
+                    <div class="lg:col-span-4 bg-tactical-card border border-tactical-border rounded p-5 self-start">
+                        <div class="border-b border-tactical-border pb-3 mb-4 flex justify-between items-center">
+                            <span id="formTitle" class="text-xs font-semibold stencil-text text-tactical-text tracking-wider">REGISTER CADET PROFILE</span>
+                            <button id="btnCancelEdit" onclick="cancelCadetEdit()" class="hidden text-[10px] font-mono text-tactical-alertRed hover:underline">CANCEL EDIT</button>
+                        </div>
+
+                        <form id="cadetForm" onsubmit="handleCadetFormSubmit(event)" class="space-y-4">
+                            <input type="hidden" id="editCadetIndex" value="">
+                            
+                            <div>
+                                <label class="block text-[10px] font-mono text-tactical-khaki uppercase mb-1">CADET IDENTIFICATION NUMBER</label>
+                                <input 
+                                    type="text" 
+                                    id="formCadetId" 
+                                    required 
+                                    class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none uppercase"
+                                    placeholder="e.g. FU-2026-904"
+                                >
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-mono text-tactical-khaki uppercase mb-1">FULL NAME (LAST, FIRST, M.I.)</label>
+                                <input 
+                                    type="text" 
+                                    id="formCadetName" 
+                                    required 
+                                    class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none uppercase"
+                                    placeholder="e.g. DELA CRUZ, JUAN A."
+                                >
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-mono text-tactical-khaki uppercase mb-1">REGIMENTAL COMPANY</label>
+                                <select 
+                                    id="formCadetCompany" 
+                                    required 
+                                    onchange="updateFormUnitDropdown()"
+                                    class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none"
+                                >
+                                    <option value="" disabled selected>SELECT COMPANY</option>
+                                    <option value="ALPHA">ALPHA COMPANY</option>
+                                    <option value="BRAVO">BRAVO COMPANY</option>
+                                    <option value="CHARLIE">CHARLIE COMPANY</option>
+                                    <option value="HQ">HQ / SPECIAL</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-mono text-tactical-khaki uppercase mb-1">ASSIGNED UNIT / PLATOON</label>
+                                <select 
+                                    id="formCadetUnit" 
+                                    required 
+                                    class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none"
+                                >
+                                    <option value="" disabled selected>Select Company first</option>
+                                </select>
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                id="btnSubmitCadet"
+                                class="w-full bg-tactical-green hover:bg-tactical-greenHover text-tactical-black font-extrabold py-3 rounded stencil-text text-xs tracking-wider transition-all flex items-center justify-center gap-1"
+                            >
+                                <i class="fa-solid fa-plus"></i> ENROLL CADET
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right Column: Roster List & Import interface -->
+                    <div class="lg:col-span-8 flex flex-col gap-4">
+                        
+                        <!-- Roster header actions -->
+                        <div class="bg-tactical-card border border-tactical-border rounded p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div class="relative w-full sm:w-64">
+                                <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-tactical-khaki">
+                                    <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                                </span>
+                                <input 
+                                    type="text" 
+                                    id="searchRosterInput" 
+                                    oninput="loadRosterTable()"
+                                    placeholder="Search Roster..." 
+                                    class="w-full bg-tactical-black border border-tactical-border text-tactical-text font-mono text-xs pl-9 pr-3 py-2 rounded focus:outline-none focus:border-tactical-green placeholder-tactical-gray"
+                                >
+                            </div>
+                            
+                            <!-- File Import Trigger Button and hidden input -->
+                            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                <input 
+                                    type="file" 
+                                    id="excelFileInput" 
+                                    accept=".xlsx, .xls, .csv" 
+                                    class="hidden" 
+                                    onchange="handleExcelImport(event)"
+                                >
+                                <button 
+                                    onclick="document.getElementById('excelFileInput').click()" 
+                                    class="bg-tactical-gray hover:bg-tactical-green hover:text-tactical-black text-tactical-text text-xs font-mono px-4 py-2 rounded border border-tactical-border transition-all flex items-center gap-2"
+                                >
+                                    <i class="fa-solid fa-file-import"></i> IMPORT ROSTER
+                                </button>
+                                <button 
+                                    onclick="exportRosterCSV()" 
+                                    class="bg-tactical-gray hover:bg-tactical-green hover:text-tactical-black text-tactical-text text-xs font-mono px-4 py-2 rounded border border-tactical-border transition-all flex items-center gap-2"
+                                >
+                                    <i class="fa-solid fa-file-export"></i> EXPORT ROSTER
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Info panel -->
+                        <div class="bg-tactical-card border border-dashed border-tactical-border rounded p-4 text-center">
+                            <p class="text-xs font-mono text-tactical-textMuted">
+                                <i class="fa-solid fa-circle-info text-tactical-green mr-1"></i>
+                                Excel/CSV columns structure must read: <strong class="text-tactical-text font-bold">ID Number</strong> · <strong class="text-tactical-text font-bold">Full Name</strong> · <strong class="text-tactical-text font-bold">Company</strong> · <strong class="text-tactical-text font-bold">Unit</strong>
+                            </p>
+                        </div>
+
+                        <!-- Regimental Roster Table -->
+                        <div class="bg-tactical-card border border-tactical-border rounded flex-grow overflow-hidden max-h-[350px]">
+                            <div class="overflow-x-auto h-full">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-tactical-black text-tactical-khaki font-mono text-[11px] uppercase border-b border-tactical-border sticky top-0 z-10">
+                                            <th class="py-3 px-4">CADET ID</th>
+                                            <th class="py-3 px-4">CADET NAME</th>
+                                            <th class="py-3 px-4">COMPANY / UNIT</th>
+                                            <th class="py-3 px-4 text-right">REGISTRATION ACTIONS</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rosterTableBody" class="divide-y divide-tactical-border text-xs font-mono">
+                                        <!-- Generated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- TAB 3 CONTENT: SECURE SYSTEM SETTINGS -->
+            <div id="tabSettings" class="tab-content hidden flex-grow flex flex-col gap-6">
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Left panel: Account credentials management -->
+                    <div class="bg-tactical-card border border-tactical-border rounded p-6">
+                        <div class="border-b border-tactical-border pb-3 mb-6">
+                            <span class="text-xs font-semibold stencil-text text-tactical-text tracking-wider">OFFICER ACCOUNT ACCESS UPDATES</span>
+                            <p class="text-[10px] font-mono text-tactical-khaki mt-0.5">MANAGE SECURITY KEY INFORMATION FOR ACCESS PORTAL</p>
+                        </div>
+
+                        <form id="settingsForm" onsubmit="handleSettingsUpdate(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-[10px] font-mono text-tactical-khaki uppercase mb-1">COMMANDING OFFICER NAME</label>
+                                <input 
+                                    type="text" 
+                                    id="setOfficerName" 
+                                    required 
+                                    class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none"
+                                >
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-mono text-tactical-khaki uppercase mb-1">OFFICER ACCESS USERNAME</label>
+                                <input 
+                                    type="text" 
+                                    id="setAdminUsername" 
+                                    required 
+                                    class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none"
+                                >
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-mono text-tactical-khaki uppercase mb-1">SECRET SECURITY PASSWORD</label>
+                                <input 
+                                    type="password" 
+                                    id="setAdminPassword" 
+                                    required 
+                                    class="w-full bg-tactical-black border border-tactical-border focus:border-tactical-green text-tactical-text font-mono text-xs px-3 py-2 rounded focus:outline-none"
+                                    placeholder="Enter secure password"
+                                >
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                class="w-full bg-tactical-green hover:bg-tactical-greenHover text-tactical-black font-extrabold py-3 rounded stencil-text text-xs tracking-wider transition-all flex items-center justify-center gap-1"
+                            >
+                                <i class="fa-solid fa-floppy-disk"></i> SAVE ACCOUNT SETTINGS
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Right panel: Hard Database Wipe controls -->
+                    <div class="bg-tactical-card border border-tactical-border rounded p-6 flex flex-col justify-between">
+                        <div>
+                            <div class="border-b border-tactical-border pb-3 mb-6">
+                                <span class="text-xs font-semibold stencil-text text-tactical-text tracking-wider">DATABASE STORAGE UTILITIES</span>
+                                <p class="text-[10px] font-mono text-tactical-khaki mt-0.5">PERFORM ARCHIVAL EXPORTS OR HARD CLEAN OF STATION DATA</p>
+                            </div>
+
+                            <p class="text-xs font-mono text-tactical-textMuted leading-relaxed mb-4">
+                                All attendance logs and cadet profile datasets reside safely inside local browser database memory caches. For administrative rotation operations or clean system startup, use the tools below.
+                            </p>
+
+                            <div class="bg-tactical-black border border-tactical-border p-4 rounded mb-6">
+                                <div class="flex items-center gap-3">
+                                    <i class="fa-solid fa-triangle-exclamation text-2xl text-tactical-alertRed"></i>
+                                    <div>
+                                        <h4 class="text-xs font-bold text-tactical-text font-mono uppercase">WARNING: DELETION AND DATA WIPES ARE IRREVERSIBLE</h4>
+                                        <p class="text-[10px] font-mono text-tactical-khaki mt-0.5">Ensure you perform CSV master backups before utilizing clean state functions.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <button 
+                                onclick="triggerDoubleConfirmWipe('attendance')" 
+                                class="w-full bg-tactical-alertRed bg-opacity-20 hover:bg-opacity-100 border border-tactical-alertRed text-tactical-text hover:text-tactical-black font-extrabold py-3 rounded stencil-text text-xs tracking-wider transition-all flex items-center justify-center gap-1.5"
+                            >
+                                <i class="fa-solid fa-dumpster-fire"></i> FLUSH ALL ATTENDANCE LOGS
+                            </button>
+                            <button 
+                                onclick="triggerDoubleConfirmWipe('full')" 
+                                class="w-full bg-tactical-alertRed bg-opacity-25 hover:bg-opacity-100 border-2 border-tactical-alertRed text-tactical-text hover:text-tactical-black font-extrabold py-3.5 rounded stencil-text text-xs tracking-wider transition-all flex items-center justify-center gap-1.5"
+                            >
+                                <i class="fa-solid fa-radiation animate-spin"></i> HARD FACTORY RESET SYSTEM
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OFFICER SESSION AUDIT TRAIL LOG PANEL -->
+                <div class="bg-tactical-card border border-tactical-border rounded p-6">
+                    <div class="border-b border-tactical-border pb-3 mb-4 flex justify-between items-center">
+                        <div>
+                            <span class="text-xs font-semibold stencil-text text-tactical-text tracking-wider">OFFICER SESSION AUDIT TRAIL</span>
+                            <p class="text-[10px] font-mono text-tactical-khaki mt-0.5">HISTORICAL TRACKING OF COMMISSIONED OFFICER LOGINS & LOGOUTS</p>
+                        </div>
+                        <button onclick="clearOfficerAuditLogs()" class="text-[10px] font-mono text-tactical-alertRed hover:underline flex items-center gap-1">
+                            <i class="fa-solid fa-eraser"></i> CLEAR AUDIT TRAIL
+                        </button>
+                    </div>
+                    
+                    <div class="overflow-hidden border border-tactical-border rounded">
+                        <div class="overflow-x-auto max-h-[220px]">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="sticky top-0 bg-tactical-black text-[10px] font-mono text-tactical-khaki uppercase border-b border-tactical-border z-10">
+                                    <tr>
+                                        <th class="py-2.5 px-4">OFFICER NAME</th>
+                                        <th class="py-2.5 px-4">CREDENTIAL TYPE</th>
+                                        <th class="py-2.5 px-4 text-center">ACTION PERFORMED</th>
+                                        <th class="py-2.5 px-4 text-center">STAMPED DATE</th>
+                                        <th class="py-2.5 px-4 text-center">STAMPED TIME</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="officerLogsTableBody" class="divide-y divide-tactical-border text-xs font-mono">
+                                    <!-- Populated dynamically via controller logic -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- FOOTER BAR FOR DASHBOARD -->
+        <footer class="bg-tactical-card border-t border-tactical-border px-6 py-4 mt-auto text-center text-xs font-mono text-tactical-khaki">
+            FOUNDATION UNIVERSITY ROTC UNIT SECURE STATION • DEPLOYED ON SUNDAY, JUNE 14, 2026
+        </footer>
+    </div>
+
+
+    <!-- EXCEL IMPORT PREVIEW MODAL -->
+    <div id="importPreviewModal" class="hidden fixed inset-0 z-50 bg-tactical-black bg-opacity-80 flex items-center justify-center p-4">
+        <div class="w-full max-w-2xl bg-tactical-card border border-tactical-border rounded-lg p-6 shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="border-b border-tactical-border pb-3 mb-4 flex justify-between items-center">
+                <div>
+                    <h3 class="text-sm font-bold stencil-text text-tactical-text tracking-wider">REGIMENTAL IMPORT PREVIEW</h3>
+                    <p class="text-[10px] font-mono text-tactical-khaki">REVIEW INCOMING CADETS BEFORE COMMITING TO DATABASE</p>
+                </div>
+                <button onclick="closeImportPreview()" class="text-tactical-textMuted hover:text-tactical-text text-lg">✕</button>
+            </div>
+
+            <div class="text-xs font-mono text-tactical-textMuted mb-3 bg-tactical-black border border-tactical-border p-3 rounded">
+                <span id="importSummaryText">Ready to parse 0 CADETS...</span>
+            </div>
+
+            <div class="overflow-y-auto flex-grow border border-tactical-border rounded mb-4">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-tactical-black text-[10px] font-mono text-tactical-khaki uppercase border-b border-tactical-border">
+                        <tr>
+                            <th class="py-2 px-3">ID NUMBER</th>
+                            <th class="py-2 px-3">FULL NAME</th>
+                            <th class="py-2 px-3">COMPANY</th>
+                            <th class="py-2 px-3">UNIT / PLATOON</th>
+                        </tr>
+                    </thead>
+                    <tbody id="importPreviewTableBody" class="divide-y divide-tactical-border text-[11px] font-mono text-tactical-textMuted">
+                        <!-- Generated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex gap-3 justify-end">
+                <button 
+                    onclick="closeImportPreview()" 
+                    class="bg-tactical-black border border-tactical-border hover:bg-tactical-gray text-tactical-textMuted hover:text-tactical-text text-xs font-mono px-4 py-2.5 rounded transition-all"
+                >
+                    CANCEL ABORT
+                </button>
+                <button 
+                    onclick="commitImportedCadets()" 
+                    class="bg-tactical-green hover:bg-tactical-greenHover text-tactical-black font-extrabold text-xs font-mono px-6 py-2.5 rounded transition-all tracking-wider uppercase flex items-center gap-1.5"
+                >
+                    <i class="fa-solid fa-file-shield"></i> IMPORT TO ROSTER
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- SYSTEM GENERAL CONFIRMATION MODAL -->
+    <div id="generalConfirmModal" class="hidden fixed inset-0 z-50 bg-tactical-black bg-opacity-80 flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-tactical-card border border-tactical-border rounded-lg p-6 shadow-2xl text-center">
+            <div class="text-tactical-alertRed mb-4">
+                <i id="confirmModalIcon" class="fa-solid fa-triangle-exclamation text-5xl"></i>
+            </div>
+            <h3 id="confirmModalTitle" class="text-base font-bold stencil-text text-tactical-text tracking-wider uppercase mb-2"></h3>
+            <p id="confirmModalMessage" class="text-xs font-mono text-tactical-textMuted leading-relaxed mb-6"></p>
+
+            <div class="flex gap-3 justify-center">
+                <button 
+                    id="confirmModalCancelBtn"
+                    onclick="closeConfirmModal()" 
+                    class="bg-tactical-black border border-tactical-border hover:bg-tactical-gray text-tactical-textMuted hover:text-tactical-text text-xs font-mono px-5 py-2.5 rounded transition-all uppercase"
+                >
+                    ABORT
+                </button>
+                <button 
+                    id="confirmModalActionBtn"
+                    class="bg-tactical-alertRed text-tactical-text font-extrabold text-xs font-mono px-6 py-2.5 rounded transition-all uppercase"
+                >
+                    PROCEED ACTIVATE
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- SYSTEM SCRIPTS / MAIN APP CONTROLLER -->
+<script>
+const __app_id = 'default-rotc-app';
+const __firebase_config = JSON.stringify({
+  apiKey: "AIzaSyBk6cYvfzmGzSRM_CZE15liR1z5BTDzd1E",
+  authDomain: "furotc-attendance-system.firebaseapp.com",
+  projectId: "furotc-attendance-system",
+  storageBucket: "furotc-attendance-system.firebasestorage.app",
+  messagingSenderId: "438393929438",
+  appId: "1:438393929438:web:7e79daf13a2b0aabab8c4f"
+});
+const __initial_auth_token = null;
+</script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 1. REGIMENTAL STRUCTURES & ASSIGNMENTS CONFIGURATION
+        const STRUCT_COMPANY_UNITS = {
+            'ALPHA': [
+                'Alpha 1st Platoon',
+                'Alpha 2nd Platoon',
+                'Alpha 3rd Platoon'
+            ],
+            'BRAVO': [
+                'Bravo 1st Platoon',
+                'Bravo 2nd Platoon',
+                'Bravo 3rd Platoon'
+            ],
+            'CHARLIE': [
+                'Charlie 1st Platoon',
+                'Charlie 2nd Platoon',
+                'Charlie 3rd Platoon'
+            ],
+            'HEAD QUARTERS': [
+                'Medics',
+                'HQ (Saturdays)',
+                'HQ Weekdays',
+                'MP (Military Police)',
+                'Band',
+                'SA (Student Assistants)'
+            ]
+        };
+
+        // Static styling maps for regimental structures
+        const COMPANY_STYLES = {
+            'ALPHA': 'bg-blue-900 bg-opacity-35 text-blue-300 border border-blue-800',
+            'BRAVO': 'bg-amber-900 bg-opacity-35 text-amber-300 border border-amber-800',
+            'CHARLIE': 'bg-purple-900 bg-opacity-35 text-purple-300 border border-purple-800',
+            'HQ': 'bg-emerald-900 bg-opacity-35 text-emerald-300 border border-emerald-800'
+        };
+
+        // 2. STATE STORAGE INIT
+        let currentSessionLog = [];
+        let globalRoster = [];
+        let globalAttendance = [];
+        let globalSettings = {};
+        let globalOfficerLogs = [];
+
+        // Firebase Sync States
+        let db = null;
+        let auth = null;
+        let isCloudActive = false;
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-rotc-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            startSystemClock();
+            handleIdInputChange(''); // Initial empty reset for lookups
+            initCompanyFilters();
+            
+            // Initiate Sync engine
+            await initFirebase();
+        });
+
+        // 2.1 DATABASE SYNCHRONIZER (FIRESTORE)
+        <!-- Firebase App (the core Firebase SDK) -->
+<script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-app.js"></script>
+<!-- Add SDKs for Firebase products that you want to use -->
+<script src="https://www.gstatic.com/firebasejs/9.x.x/firebase-database.js"></script>
+
+<script>
+  const firebaseConfig = {
+  apiKey: "AIzaSyBk6cYvfzmGzSRM_CZE15liR1z5BTDzd1E",
+  authDomain: "furotc-attendance-system.firebaseapp.com",
+  projectId: "furotc-attendance-system",
+  storageBucket: "furotc-attendance-system.firebasestorage.app",
+  messagingSenderId: "438393929438",
+  appId: "1:438393929438:web:7e79daf13a2b0aabab8c4f",
+  measurementId: "G-8T1XFFBJSY"
+};
+
+  // Initialize Firebase
+  const app = firebase.initializeApp(firebaseConfig);
+</script>
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                let userCredential;
+                if (initialAuthToken) {
+                    userCredential = await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    userCredential = await signInAnonymously(auth);
+                }
+
+                if (userCredential && userCredential.user) {
+                    isCloudActive = true;
+                    setCloudStatus(true);
+                    setupRealtimeSubscriptions();
+                } else {
+                    throw new Error("Cloud auth protocol aborted.");
+                }
+            } catch (err) {
+                console.error("Firebase auth failed. Reverting to local storage.", err);
+                setCloudStatus(false);
+                initLocalData();
+            }
+        }
+
+        function setCloudStatus(active) {
+            const cloudStatusText = document.getElementById('cloudStatusText');
+            const dashCloudStatusText = document.getElementById('dashCloudStatusText');
+            
+            if (active) {
+                cloudStatusText.innerHTML = `<span class="flex items-center gap-1.5 text-tactical-green"><i class="fa-solid fa-cloud"></i> CLOUD SECURED</span>`;
+                if (dashCloudStatusText) {
+                    dashCloudStatusText.innerHTML = `<i class="fa-solid fa-cloud text-tactical-green animate-pulse"></i> CLOUD SECURED`;
+                    dashCloudStatusText.className = "text-xs font-mono text-tactical-green bg-tactical-black border border-tactical-green px-3 py-2 rounded flex items-center gap-1.5";
+                }
+            } else {
+                cloudStatusText.innerHTML = `<span class="flex items-center gap-1.5 text-tactical-khaki"><i class="fa-solid fa-cloud-arrow-up"></i> LOCAL STORAGE MODE</span>`;
+                if (dashCloudStatusText) {
+                    dashCloudStatusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-tactical-khaki"></i> LOCAL CACHE DATABASE`;
+                    dashCloudStatusText.className = "text-xs font-mono text-tactical-khaki bg-tactical-black border border-tactical-border px-3 py-2 rounded flex items-center gap-1.5";
+                }
+            }
+        }
+
+        function setupRealtimeSubscriptions() {
+            const rosterRef = collection(db, 'artifacts', appId, 'public', 'data', 'roster');
+            const attendanceRef = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
+            const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
+            const officerLogsRef = collection(db, 'artifacts', appId, 'public', 'data', 'officerLogs');
+
+            // 1. Roster sync listener
+            onSnapshot(rosterRef, (snapshot) => {
+                const tempRoster = [];
+                snapshot.forEach(doc => {
+                    tempRoster.push(doc.data());
+                });
+                if (tempRoster.length === 0) {
+                    preSeedFirestoreRoster();
+                } else {
+                    globalRoster = tempRoster;
+                    localStorage.setItem('rotcRoster', JSON.stringify(globalRoster));
+                    loadRosterTable();
+                    updateDashboardStats();
+                }
+            }, (error) => {
+                console.error("Roster subscription failure", error);
+            });
+
+            // 2. Attendance sync listener
+            onSnapshot(attendanceRef, (snapshot) => {
+                const tempAttendance = [];
+                snapshot.forEach(doc => {
+                    tempAttendance.push(doc.data());
+                });
+                // Sort in memory by temporal values
+                tempAttendance.sort((a, b) => {
+                    return new Date(a.date + ' ' + a.time) - new Date(b.date + ' ' + b.time);
+                });
+                globalAttendance = tempAttendance;
+                localStorage.setItem('rotcAttendance', JSON.stringify(globalAttendance));
+                loadAttendanceTable();
+                updateDashboardStats();
+            }, (error) => {
+                console.error("Attendance subscription failure", error);
+            });
+
+            // 3. Settings configurations sync listener
+            onSnapshot(settingsRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    globalSettings = snapshot.data();
+                    localStorage.setItem('rotcSettings', JSON.stringify(globalSettings));
+                    setupSettingsFields();
+                } else {
+                    const defaultSettings = {
+                        officerName: 'CPT. JUAN DELA CRUZ',
+                        username: 'admin',
+                        password: 'rotc123'
+                    };
+                    setDoc(settingsRef, defaultSettings);
+                }
+            }, (error) => {
+                console.error("Settings subscription failure", error);
+            });
+
+            // 4. Officer audit logs sync listener
+            onSnapshot(officerLogsRef, (snapshot) => {
+                const tempLogs = [];
+                snapshot.forEach(doc => {
+                    tempLogs.push(doc.data());
+                });
+                tempLogs.sort((a, b) => {
+                    return new Date(a.date + ' ' + a.time) - new Date(b.date + ' ' + b.time);
+                });
+                globalOfficerLogs = tempLogs;
+                localStorage.setItem('rotcOfficerLogs', JSON.stringify(globalOfficerLogs));
+                loadOfficerLogsTable();
+            }, (error) => {
+                console.error("Officer audit trace subscription failure", error);
+            });
+        }
+
+        // Pre-populate empty environments with test templates
+        async function preSeedFirestoreRoster() {
+            if (!isCloudActive) return;
+            for (const cadet of PRE_SEEDED_ROSTER) {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'roster', cadet.id);
+                await setDoc(docRef, cadet);
+            }
+        }
+
+        function initLocalData() {
+            // Establish cadet roster locally
+            if (!localStorage.getItem('rotcRoster')) {
+                localStorage.setItem('rotcRoster', JSON.stringify(PRE_SEEDED_ROSTER));
+            }
+            globalRoster = JSON.parse(localStorage.getItem('rotcRoster'));
+
+            // Establish attendance databases locally
+            if (!localStorage.getItem('rotcAttendance')) {
+                localStorage.setItem('rotcAttendance', JSON.stringify([]));
+            }
+            globalAttendance = JSON.parse(localStorage.getItem('rotcAttendance'));
+
+            // Setup access configurations locally
+            if (!localStorage.getItem('rotcSettings')) {
+                const defaultSettings = {
+                    officerName: 'CPT. JUAN DELA CRUZ',
+                    username: 'admin',
+                    password: 'rotc123'
+                };
+                localStorage.setItem('rotcSettings', JSON.stringify(defaultSettings));
+            }
+            globalSettings = JSON.parse(localStorage.getItem('rotcSettings'));
+
+            // Establish officer logging history locally
+            if (!localStorage.getItem('rotcOfficerLogs')) {
+                localStorage.setItem('rotcOfficerLogs', JSON.stringify([]));
+            }
+            globalOfficerLogs = JSON.parse(localStorage.getItem('rotcOfficerLogs'));
+
+            // Trigger offline tables
+            loadRosterTable();
+            loadAttendanceTable();
+            loadOfficerLogsTable();
+            updateDashboardStats();
+        }
+
+        function startSystemClock() {
+            const clockEl = document.getElementById('liveClock');
+            const dateEl = document.getElementById('liveDate');
+            
+            function updateTime() {
+                const now = new Date();
+                clockEl.textContent = now.toLocaleTimeString('en-US', { hour12: true });
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                dateEl.textContent = now.toLocaleDateString('en-US', options);
+            }
+            
+            updateTime();
+            setInterval(updateTime, 1000);
+        }
+
+        function handleIdInputChange(enteredId) {
+            enteredId = enteredId.trim().toUpperCase();
+            const previewCard = document.getElementById('cadetPreviewCard');
+            const previewName = document.getElementById('previewName');
+            const previewId = document.getElementById('previewID');
+            const previewCompany = document.getElementById('previewCompany');
+            const previewAvatar = document.getElementById('previewAvatar');
+
+            if (!enteredId) {
+                previewCard.className = "bg-tactical-black border border-tactical-border rounded p-4 flex items-center gap-4 transition-all duration-300 opacity-60";
+                previewName.textContent = "ENTER ID TO VERIFY";
+                previewId.textContent = "ID: ——————";
+                previewCompany.textContent = "PLATOON: —";
+                previewCompany.className = "mt-2 inline-block px-2 py-0.5 bg-tactical-gray text-[10px] font-mono rounded text-tactical-khaki uppercase border border-tactical-border";
+                previewAvatar.className = "fa-solid fa-user-shield text-2xl text-tactical-khaki";
+                return;
+            }
+
+            const cadet = globalRoster.find(c => c.id.toUpperCase() === enteredId);
+
+            if (cadet) {
+                // ACTIVE AND REGISTERED CADET IN REGISTRY
+                previewCard.className = "bg-tactical-black border-2 border-tactical-green rounded p-4 flex items-center gap-4 transition-all duration-300 glow-green";
+                previewName.textContent = cadet.name;
+                previewId.textContent = `ID: ${cadet.id}`;
+                previewCompany.textContent = `${cadet.company} • ${cadet.unit}`;
+                previewCompany.className = "mt-2 inline-block px-2 py-0.5 bg-tactical-green bg-opacity-25 text-[10px] font-mono rounded text-tactical-green uppercase border border-tactical-green";
+                previewAvatar.className = "fa-solid fa-circle-check text-2xl text-tactical-green";
+            } else {
+                // NOT FOUND / UNIDENTIFIED PROFILE
+                previewCard.className = "bg-tactical-black border-2 border-tactical-alertRed rounded p-4 flex items-center gap-4 transition-all duration-300 glow-red";
+                previewName.textContent = "UNREGISTERED ID CARD";
+                previewId.textContent = `ID: ${enteredId}`;
+                previewCompany.textContent = "VERIFICATION BLOCKED";
+                previewCompany.className = "mt-2 inline-block px-2 py-0.5 bg-tactical-alertRed bg-opacity-25 text-[10px] font-mono rounded text-tactical-alertRed uppercase border border-tactical-alertRed";
+                previewAvatar.className = "fa-solid fa-triangle-exclamation text-2xl text-tactical-alertRed animate-pulse";
+            }
+        }
+
+        async function handleAttendanceSubmit(event) {
+            event.preventDefault();
+            const inputField = document.getElementById('cadetIdInput');
+            const typedId = inputField.value.trim().toUpperCase();
+
+            if (!typedId) return;
+
+            // Search Cadet profile in global Registry database
+            const foundCadet = globalRoster.find(c => c.id.toUpperCase() === typedId);
+
+            if (!foundCadet) {
+                showNotification(
+                    "INVALID PROFILE", 
+                    `The ID "${typedId}" is not registered. Verification locked. Seek assistance from an Admin/Officer.`, 
+                    "error"
+                );
+                inputField.value = "";
+                handleIdInputChange("");
+                return;
+            }
+
+            // Secure attendance verification successful
+            const now = new Date();
+            const logEntry = {
+                id: foundCadet.id,
+                name: foundCadet.name,
+                company: foundCadet.company,
+                unit: foundCadet.unit,
+                date: now.toLocaleDateString('en-US'),
+                time: now.toLocaleTimeString('en-US', { hour12: true }),
+                status: "Attendance Secured"
+            };
+
+            if (isCloudActive) {
+                // Let Firestore auto-generate standard auto-id
+                const newLogRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'));
+                await setDoc(newLogRef, { ...logEntry, docId: newLogRef.id });
+            } else {
+                globalAttendance.push(logEntry);
+                localStorage.setItem('rotcAttendance', JSON.stringify(globalAttendance));
+                loadAttendanceTable();
+                updateDashboardStats();
+            }
+
+            // Populate local session tracking array lists
+            currentSessionLog.unshift(logEntry); 
+
+            // Render confirmation alerts
+            showNotification(
+                "VERIFIED SECURED", 
+                `Cdt. ${foundCadet.name} (${foundCadet.company}) recorded at ${logEntry.time}`, 
+                "success"
+            );
+
+            // Cleanup
+            inputField.value = "";
+            handleIdInputChange("");
+            loadSessionLogs();
+        }
+
+        // Render recent logged records on Screen 1 bottom strip
+        function loadSessionLogs() {
+            const container = document.getElementById('sessionLogContainer');
+            if (currentSessionLog.length === 0) {
+                container.innerHTML = `<p class="text-xs font-mono text-tactical-gray text-center py-4 border border-dashed border-tactical-border rounded">No transactions logged yet this session.</p>`;
+                return;
+            }
+
+            // Capture top 5 items in array limits
+            const renderList = currentSessionLog.slice(0, 5);
+            container.innerHTML = renderList.map(item => `
+                <div class="flex items-center justify-between bg-tactical-black border border-tactical-border rounded px-3 py-2 text-xs font-mono transition-all hover:border-tactical-green">
+                    <div class="flex items-center gap-2 overflow-hidden mr-2">
+                        <i class="fa-solid fa-circle-check text-tactical-green text-xs flex-shrink-0"></i>
+                        <span class="text-tactical-khaki font-bold select-all">${item.id}</span>
+                        <span class="text-tactical-text truncate">${item.name}</span>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                        <span class="text-tactical-green block text-[10px] font-bold">${item.time}</span>
+                        <span class="text-[9px] text-tactical-textMuted">${item.company}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 5. SECURE ADMIN PORTAL WORKFLOWS (SCREEN 2)
+        async function handleLoginSubmit(event) {
+            event.preventDefault();
+            const userVal = document.getElementById('loginUsername').value.trim();
+            const passVal = document.getElementById('loginPassword').value.trim();
+
+            if (userVal === globalSettings.username && passVal === globalSettings.password) {
+                // Settle and boot secure configurations
+                document.getElementById('displayOfficerName').textContent = globalSettings.officerName;
+                document.getElementById('loginUsername').value = "";
+                document.getElementById('loginPassword').value = "";
+
+                // Record audit trail event
+                await recordOfficerLog(globalSettings.officerName, globalSettings.username, "LOGIN");
+
+                // Transition system screens
+                transitionToScreen('adminDashboardPage');
+                
+                // Preload lists inside operational boards
+                updateDashboardStats();
+                switchTab('tabAttendance');
+                showNotification("ACCESS GRANTED", `Welcome back Commanding Officer.`, "success");
+            } else {
+                showNotification("ACCESS BLOCKED", "Incorrect Officer Identification Credentials.", "error");
+            }
+        }
+
+        async function handleLogout() {
+            // Record audit trail event before session variables close down
+            await recordOfficerLog(globalSettings.officerName, globalSettings.username, "LOGOUT");
+
+            transitionToScreen('attendancePage');
+            currentSessionLog = []; // clear session list security
+            loadSessionLogs();
+            showNotification("LOGOUT COMPLETE", "Officer session logged out cleanly.", "info");
+        }
+
+        // 6. DASHBOARD GENERAL CONTROLLERS (SCREEN 3)
+        function updateDashboardStats() {
+            document.getElementById('statTotalLogs').textContent = globalAttendance.length;
+            
+            const todayStr = new Date().toLocaleDateString('en-US');
+            const todayLogsCount = globalAttendance.filter(l => l.date === todayStr).length;
+            document.getElementById('statTodayLogs').textContent = todayLogsCount;
+
+            document.getElementById('statTotalCadets').textContent = globalRoster.length;
+
+            const uniqueCompanies = [...new Set(globalRoster.map(c => c.company))];
+            document.getElementById('statActiveCompanies').textContent = uniqueCompanies.length || 4;
+        }
+
+        function transitionToScreen(targetId) {
+            const screens = ['attendancePage', 'adminLoginPage', 'adminDashboardPage'];
+            screens.forEach(sId => {
+                const el = document.getElementById(sId);
+                if (sId === targetId) {
+                    el.classList.remove('hidden');
+                    if (targetId === 'attendancePage') {
+                        setTimeout(() => document.getElementById('cadetIdInput').focus(), 150);
+                    }
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+
+        function switchTab(tabId) {
+            const tabs = ['tabAttendance', 'tabCadetRoster', 'tabSettings'];
+            tabs.forEach(tId => {
+                const panel = document.getElementById(tId);
+                const button = document.getElementById('btn' + tId.charAt(0).toUpperCase() + tId.slice(1));
+                
+                if (tId === tabId) {
+                    panel.classList.remove('hidden');
+                    button.classList.add('text-tactical-green', 'border-tactical-green');
+                    button.classList.remove('text-tactical-textMuted', 'border-transparent');
+                } else {
+                    panel.classList.add('hidden');
+                    button.classList.remove('text-tactical-green', 'border-tactical-green');
+                    button.classList.add('text-tactical-textMuted', 'border-transparent');
+                }
+            });
+
+            if (tabId === 'tabAttendance') {
+                loadAttendanceTable();
+            } else if (tabId === 'tabCadetRoster') {
+                loadRosterTable();
+            } else if (tabId === 'tabSettings') {
+                setupSettingsFields();
+                loadOfficerLogsTable();
+            }
+            updateDashboardStats();
+        }
+
+        // 7. TAB 1: ATTENDANCE DATABASE CONTROL & VIEWPORT
+        function initCompanyFilters() {
+            const compSelect = document.getElementById('filterCompanySelect');
+            const unitSelect = document.getElementById('filterUnitSelect');
+
+            compSelect.addEventListener('change', () => {
+                const selCompany = compSelect.value;
+                unitSelect.innerHTML = '<option value="ALL">ALL UNITS/PLATOONS</option>';
+
+                if (selCompany !== 'ALL' && STRUCT_COMPANY_UNITS[selCompany]) {
+                    STRUCT_COMPANY_UNITS[selCompany].forEach(unit => {
+                        unitSelect.innerHTML += `<option value="${unit}">${unit.toUpperCase()}</option>`;
+                    });
+                }
+                loadAttendanceTable();
+            });
+        }
+
+        function loadAttendanceTable() {
+            const body = document.getElementById('attendanceTableBody');
+            const searchVal = document.getElementById('searchAttendanceInput').value.toLowerCase().trim();
+            const selCompany = document.getElementById('filterCompanySelect').value;
+            const selUnit = document.getElementById('filterUnitSelect').value;
+
+            const displayList = [...globalAttendance].reverse();
+
+            const filtered = displayList.filter(item => {
+                const matchesSearch = item.name.toLowerCase().includes(searchVal) || item.id.toLowerCase().includes(searchVal);
+                const matchesCompany = (selCompany === 'ALL' || item.company === selCompany);
+                const matchesUnit = (selUnit === 'ALL' || item.unit === selUnit);
+                return matchesSearch && matchesCompany && matchesUnit;
+            });
+
+            if (filtered.length === 0) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-tactical-textMuted uppercase font-mono">
+                            No records verified match parameters.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            body.innerHTML = filtered.map((item) => {
+                const actualGlobalIndex = globalAttendance.findIndex(orig => 
+                    orig.id === item.id && orig.date === item.date && orig.time === item.time
+                );
+
+                const compBadgeClass = COMPANY_STYLES[item.company] || 'bg-tactical-gray text-tactical-textMuted';
+
+                return `
+                    <tr class="hover:bg-tactical-gray transition-all">
+                        <td class="py-3 px-4 font-bold text-tactical-green select-all">${item.id}</td>
+                        <td class="py-3 px-4 text-tactical-text font-sans font-medium uppercase">${item.name}</td>
+                        <td class="py-3 px-4">
+                            <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold ${compBadgeClass}">
+                                ${item.company} • ${item.unit}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-center font-bold text-tactical-textMuted">${item.date}</td>
+                        <td class="py-3 px-4 text-center text-tactical-khaki">${item.time}</td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="px-2 py-0.5 bg-tactical-green bg-opacity-10 text-tactical-green rounded-full text-[10px] font-bold uppercase border border-tactical-green border-opacity-20">
+                                ${item.status}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            <button 
+                                onclick="confirmDeleteAttendance(${actualGlobalIndex})" 
+                                class="text-tactical-alertRed hover:text-white hover:bg-tactical-alertRed hover:bg-opacity-20 px-2 py-1 rounded transition-all"
+                                title="Delete attendance trace log record"
+                            >
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function confirmDeleteAttendance(globalIndex) {
+            if (globalIndex === -1) return;
+            const record = globalAttendance[globalIndex];
+
+            showConfirmModal(
+                "CONFIRM TRANSACTION VOID",
+                `You are about to remove the attendance log entry for Cdt. ${record.name} stamped on ${record.date} - ${record.time}. This removes daily credit tracing!`,
+                async () => {
+                    if (isCloudActive) {
+                        const docId = record.docId;
+                        if (docId) {
+                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'attendance', docId);
+                            await deleteDoc(docRef);
+                        }
+                    } else {
+                        globalAttendance.splice(globalIndex, 1);
+                        localStorage.setItem('rotcAttendance', JSON.stringify(globalAttendance));
+                        loadAttendanceTable();
+                        updateDashboardStats();
+                    }
+                    showNotification("RECORD VOIDED", "Secure entry scrubbed successfully.", "info");
+                }
+            );
+        }
+
+        function exportAttendanceCSV() {
+            if (globalAttendance.length === 0) {
+                showNotification("EMPTY DATASET", "No log transactions in system database memory to export.", "info");
+                return;
+            }
+
+            const wsData = globalAttendance.map(item => ({
+                "ID Number": item.id,
+                "Full Name": item.name,
+                "Regimental Company": item.company,
+                "Assigned Unit": item.unit,
+                "Stamped Date": item.date,
+                "Stamped Time": item.time,
+                "Status": item.status
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Attendance Log");
+            
+            const filename = `FU_ROTC_Attendance_Logs_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(wb, filename);
+            showNotification("EXPORT OK", `Export file package built: ${filename}`, "success");
+        }
+
+
+        // 8. TAB 2: REGIMENTAL CADET ROSTER MANAGER
+        function updateFormUnitDropdown() {
+            const comp = document.getElementById('formCadetCompany').value;
+            const unitSelect = document.getElementById('formCadetUnit');
+            unitSelect.innerHTML = '';
+
+            if (comp && STRUCT_COMPANY_UNITS[comp]) {
+                STRUCT_COMPANY_UNITS[comp].forEach(unit => {
+                    unitSelect.innerHTML += `<option value="${unit}">${unit}</option>`;
+                });
+            } else {
+                unitSelect.innerHTML = '<option value="" disabled selected>Select Company first</option>';
+            }
+        }
+
+        async function handleCadetFormSubmit(event) {
+            event.preventDefault();
+            const formIdx = document.getElementById('editCadetIndex').value;
+            const cadetId = document.getElementById('formCadetId').value.trim().toUpperCase();
+            const cadetName = document.getElementById('formCadetName').value.trim().toUpperCase();
+            const cadetCompany = document.getElementById('formCadetCompany').value;
+            const cadetUnit = document.getElementById('formCadetUnit').value;
+
+            if (!cadetId || !cadetName || !cadetCompany || !cadetUnit) {
+                showNotification("FORM VALIDATION FAILED", "Must satisfy registration parameter files.", "error");
+                return;
+            }
+
+            const newProfile = { id: cadetId, name: cadetName, company: cadetCompany, unit: cadetUnit };
+
+            if (formIdx !== "") {
+                const idx = parseInt(formIdx);
+                const oldProfile = globalRoster[idx];
+
+                // Check duplicates ID exclusions
+                const dupCheck = globalRoster.find((c, cIdx) => c.id.toUpperCase() === cadetId && cIdx !== idx);
+                if (dupCheck) {
+                    showNotification("REGISTRATION ERROR", `The identification code ${cadetId} is assigned to another active record file.`, "error");
+                    return;
+                }
+
+                if (isCloudActive) {
+                    // Update main Roster doc
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'roster', cadetId);
+                    await setDoc(docRef, newProfile);
+                    if (oldProfile.id !== cadetId) {
+                        const oldDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'roster', oldProfile.id);
+                        await deleteDoc(oldDocRef);
+                    }
+
+                    // Propagate structural changes directly on Firestore attendance logs
+                    const attSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'));
+                    attSnap.forEach(async (logDoc) => {
+                        const logData = logDoc.data();
+                        if (logData.id.toUpperCase() === oldProfile.id.toUpperCase()) {
+                            await updateDoc(logDoc.ref, {
+                                id: cadetId,
+                                name: cadetName,
+                                company: cadetCompany,
+                                unit: cadetUnit
+                            });
+                        }
+                    });
+                } else {
+                    globalAttendance.forEach(log => {
+                        if (log.id.toUpperCase() === oldProfile.id.toUpperCase()) {
+                            log.id = cadetId;
+                            log.name = cadetName;
+                            log.company = cadetCompany;
+                            log.unit = cadetUnit;
+                        }
+                    });
+                    localStorage.setItem('rotcAttendance', JSON.stringify(globalAttendance));
+
+                    globalRoster[idx] = newProfile;
+                    localStorage.setItem('rotcRoster', JSON.stringify(globalRoster));
+                    loadRosterTable();
+                    updateDashboardStats();
+                }
+                showNotification("PROFILE UPDATED", `Cdt. ${cadetName} has been modified dynamically.`, "success");
+                cancelCadetEdit();
+            } else {
+                // NEW PROFILE INSERT OPERATION
+                const dupCheck = globalRoster.find(c => c.id.toUpperCase() === cadetId);
+                if (dupCheck) {
+                    showNotification("REGISTRATION ERROR", `An active record with key index ${cadetId} is already enrolled.`, "error");
+                    return;
+                }
+
+                if (isCloudActive) {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'roster', cadetId);
+                    await setDoc(docRef, newProfile);
+                } else {
+                    globalRoster.push(newProfile);
+                    localStorage.setItem('rotcRoster', JSON.stringify(globalRoster));
+                    loadRosterTable();
+                    updateDashboardStats();
+                }
+                showNotification("ENROLLMENT SECURED", `Registered Cdt. ${cadetName} to Company ranks.`, "success");
+                document.getElementById('cadetForm').reset();
+            }
+        }
+
+        function loadRosterTable() {
+            const body = document.getElementById('rosterTableBody');
+            const searchVal = document.getElementById('searchRosterInput').value.toLowerCase().trim();
+
+            const filtered = globalRoster.filter(item => {
+                return item.id.toLowerCase().includes(searchVal) || 
+                       item.name.toLowerCase().includes(searchVal) ||
+                       item.company.toLowerCase().includes(searchVal) ||
+                       item.unit.toLowerCase().includes(searchVal);
+            });
+
+            if (filtered.length === 0) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="py-8 text-center text-tactical-textMuted uppercase font-mono">
+                            No registered cadets match roster criteria.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            body.innerHTML = filtered.map((item) => {
+                const actualIndex = globalRoster.findIndex(c => c.id === item.id);
+                const badgeClass = COMPANY_STYLES[item.company] || 'bg-tactical-gray text-tactical-textMuted';
+
+                return `
+                    <tr class="hover:bg-tactical-gray transition-all">
+                        <td class="py-3 px-4 font-bold text-tactical-green select-all">${item.id}</td>
+                        <td class="py-3 px-4 text-tactical-text font-sans font-medium uppercase">${item.name}</td>
+                        <td class="py-3 px-4">
+                            <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold ${badgeClass}">
+                                ${item.company} • ${item.unit}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-right flex justify-end gap-2">
+                            <button 
+                                onclick="startEditCadet(${actualIndex})" 
+                                class="bg-tactical-gray hover:bg-tactical-green hover:text-tactical-black text-tactical-text text-xs px-2.5 py-1 rounded transition-all border border-tactical-border"
+                                title="Edit Profile Details"
+                            >
+                                <i class="fa-solid fa-user-pen"></i>
+                            </button>
+                            <button 
+                                onclick="confirmDeleteCadet(${actualIndex})" 
+                                class="bg-tactical-gray hover:bg-tactical-alertRed hover:text-white text-tactical-textMuted hover:border-tactical-alertRed px-2.5 py-1 rounded transition-all border border-tactical-border"
+                                title="Decommission Profile"
+                            >
+                                <i class="fa-solid fa-user-slash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function startEditCadet(index) {
+            const cadet = globalRoster[index];
+            document.getElementById('editCadetIndex').value = index;
+            document.getElementById('formCadetId').value = cadet.id;
+            document.getElementById('formCadetName').value = cadet.name;
+            document.getElementById('formCadetCompany').value = cadet.company;
+            updateFormUnitDropdown();
+            document.getElementById('formCadetUnit').value = cadet.unit;
+
+            document.getElementById('formTitle').textContent = "MODIFY CADET ACCESS REGISTRY";
+            document.getElementById('btnSubmitCadet').innerHTML = `<i class="fa-solid fa-floppy-disk"></i> UPDATE PROFILE DETAILS`;
+            document.getElementById('btnCancelEdit').classList.remove('hidden');
+        }
+
+        function cancelCadetEdit() {
+            document.getElementById('editCadetIndex').value = "";
+            document.getElementById('cadetForm').reset();
+            updateFormUnitDropdown();
+            document.getElementById('formTitle').textContent = "REGISTER CADET PROFILE";
+            document.getElementById('btnSubmitCadet').innerHTML = `<i class="fa-solid fa-plus"></i> ENROLL CADET`;
+            document.getElementById('btnCancelEdit').classList.add('hidden');
+        }
+
+        function confirmDeleteCadet(index) {
+            const cadet = globalRoster[index];
+            showConfirmModal(
+                "DECOMMISSION CADET REGISTRY FILE",
+                `Confirm removal of Cdt. ${cadet.name} (${cadet.id}) from Regimental files. Existing historical muster registers for this record will persist.`,
+                async () => {
+                    if (isCloudActive) {
+                        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'roster', cadet.id);
+                        await deleteDoc(docRef);
+                    } else {
+                        globalRoster.splice(index, 1);
+                        localStorage.setItem('rotcRoster', JSON.stringify(globalRoster));
+                        loadRosterTable();
+                        updateDashboardStats();
+                    }
+                    showNotification("REGISTRY WIPED", "Cadet roster file decommissioned cleanly.", "info");
+                }
+            );
+        }
+
+        // 9. ROSTER SPREADSHEET IMPORTS
+        let incomingCadetBatch = [];
+
+        function handleExcelImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    processImportedJSON(jsonData);
+                } catch (error) {
+                    showNotification("PARSING FAILURE", "Error interpreting Excel worksheet architecture format.", "error");
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            event.target.value = "";
+        }
+
+        function processImportedJSON(data) {
+            incomingCadetBatch = [];
+            let unmappedRowErrors = 0;
+
+            data.forEach(row => {
+                const idNum = (row["ID Number"] || row["ID"] || row["Id Number"] || row["id"] || "").toString().trim();
+                const fullName = (row["Full Name"] || row["Name"] || row["Name (Last, First)"] || row["name"] || "").toString().trim();
+                
+                let company = (row["Company"] || row["Regimental Company"] || row["company"] || "").toString().trim().toUpperCase();
+                let unit = (row["Unit"] || row["Platoon"] || row["Assigned Unit"] || row["unit"] || "").toString().trim();
+
+                if (!idNum || !fullName) {
+                    unmappedRowErrors++;
+                    return; 
+                }
+
+                if (!STRUCT_COMPANY_UNITS[company]) {
+                    if (company.includes("A") || company.includes("ALPHA")) company = "ALPHA";
+                    else if (company.includes("B") || company.includes("BRAVO")) company = "BRAVO";
+                    else if (company.includes("C") || company.includes("CHARLIE")) company = "CHARLIE";
+                    else if (company.includes("HQ") || company.includes("HEAD") || company.includes("SPEC")) company = "HQ";
+                    else company = "ALPHA"; 
+                }
+
+                const validUnits = STRUCT_COMPANY_UNITS[company];
+                const matchedUnit = validUnits.find(u => u.toLowerCase() === unit.toLowerCase()) || validUnits[0];
+
+                incomingCadetBatch.push({
+                    id: idNum.toUpperCase(),
+                    name: fullName.toUpperCase(),
+                    company: company,
+                    unit: matchedUnit
+                });
+            });
+
+            if (incomingCadetBatch.length === 0) {
+                showNotification("IMPORT LOCKED", "Could not interpret any valid Cadet profiles inside the document structure.", "error");
+                return;
+            }
+
+            openImportPreview(unmappedRowErrors);
+        }
+
+        function openImportPreview(unmappedErrors) {
+            const modal = document.getElementById('importPreviewModal');
+            const summaryText = document.getElementById('importSummaryText');
+            const tbody = document.getElementById('importPreviewTableBody');
+
+            summaryText.innerHTML = `Successfully processed <span class="text-tactical-green font-bold font-mono">${incomingCadetBatch.length} CADETS</span> ready to import. 
+            ${unmappedErrors > 0 ? `<br><span class="text-tactical-alertRed font-bold font-mono">Note: ${unmappedErrors} lines omitted</span> due to incomplete header requirements.` : ''}`;
+
+            tbody.innerHTML = incomingCadetBatch.slice(0, 50).map(c => `
+                <tr class="border-b border-tactical-border">
+                    <td class="py-2 px-3 text-tactical-green font-bold select-all">${c.id}</td>
+                    <td class="py-2 px-3 text-tactical-text truncate font-sans">${c.name}</td>
+                    <td class="py-2 px-3 text-[10px] font-bold text-tactical-khaki">${c.company}</td>
+                    <td class="py-2 px-3 font-sans truncate">${c.unit}</td>
+                </tr>
+            `).join('');
+
+            if (incomingCadetBatch.length > 50) {
+                tbody.innerHTML += `
+                    <tr>
+                        <td colspan="4" class="py-3 text-center text-tactical-khaki italic">
+                            Showing top 50 records...
+                        </td>
+                    </tr>
+                `;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeImportPreview() {
+            document.getElementById('importPreviewModal').classList.add('hidden');
+            incomingCadetBatch = [];
+        }
+
+        async function commitImportedCadets() {
+            let newlyAddedCount = 0;
+            let updatedCount = 0;
+
+            if (isCloudActive) {
+                for (const incoming of incomingCadetBatch) {
+                    const existingIdx = globalRoster.findIndex(c => c.id === incoming.id);
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'roster', incoming.id);
+                    await setDoc(docRef, incoming);
+                    if (existingIdx !== -1) {
+                        updatedCount++;
+                    } else {
+                        newlyAddedCount++;
+                    }
+                }
+            } else {
+                incomingCadetBatch.forEach(incoming => {
+                    const existingIdx = globalRoster.findIndex(c => c.id === incoming.id);
+
+                    if (existingIdx !== -1) {
+                        const oldRoster = globalRoster[existingIdx];
+                        globalAttendance.forEach(log => {
+                            if (log.id.toUpperCase() === oldRoster.id.toUpperCase()) {
+                                log.name = incoming.name;
+                                log.company = incoming.company;
+                                log.unit = incoming.unit;
+                            }
+                        });
+                        globalRoster[existingIdx] = incoming;
+                        updatedCount++;
+                    } else {
+                        globalRoster.push(incoming);
+                        newlyAddedCount++;
+                    }
+                });
+
+                localStorage.setItem('rotcRoster', JSON.stringify(globalRoster));
+                localStorage.setItem('rotcAttendance', JSON.stringify(globalAttendance));
+                loadRosterTable();
+                updateDashboardStats();
+            }
+
+            closeImportPreview();
+            showNotification(
+                "BATCH UPLOADED", 
+                `Roster updated: Added ${newlyAddedCount} profiles, updated ${updatedCount} profiles.`, 
+                "success"
+            );
+        }
+
+        function exportRosterCSV() {
+            if (globalRoster.length === 0) {
+                showNotification("EMPTY DATASET", "No cadets in roster directory memories to export.", "info");
+                return;
+            }
+
+            const wsData = globalRoster.map(item => ({
+                "ID Number": item.id,
+                "Full Name": item.name,
+                "Regimental Company": item.company,
+                "Assigned Unit": item.unit
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Regimental Roster");
+
+            const filename = `FU_ROTC_Roster_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(wb, filename);
+            showNotification("EXPORT OK", `Export file package built: ${filename}`, "success");
+        }
+
+
+        // 10. TAB 3: SYSTEM SETTINGS MANAGEMENT & WIPES
+        function setupSettingsFields() {
+            document.getElementById('setOfficerName').value = globalSettings.officerName || '';
+            document.getElementById('setAdminUsername').value = globalSettings.username || '';
+            document.getElementById('setAdminPassword').value = globalSettings.password || '';
+        }
+
+        async function handleSettingsUpdate(event) {
+            event.preventDefault();
+            const officer = document.getElementById('setOfficerName').value.trim();
+            const user = document.getElementById('setAdminUsername').value.trim();
+            const pass = document.getElementById('setAdminPassword').value.trim();
+
+            if (!officer || !user || !pass) {
+                showNotification("UPDATE BLOCKED", "All security properties are mandatory.", "error");
+                return;
+            }
+
+            globalSettings = {
+                officerName: officer,
+                username: user,
+                password: pass
+            };
+
+            if (isCloudActive) {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
+                await setDoc(docRef, globalSettings);
+            } else {
+                localStorage.setItem('rotcSettings', JSON.stringify(globalSettings));
+                document.getElementById('displayOfficerName').textContent = officer;
+            }
+            showNotification("STATION SECURED", "Officer accounts configuration details updated successfully.", "success");
+        }
+
+        // 10.1 OFFICER AUDIT LOG UTILITIES
+        async function recordOfficerLog(officerName, username, action) {
+            const now = new Date();
+            const logEntry = {
+                officerName: officerName,
+                username: username,
+                action: action,
+                date: now.toLocaleDateString('en-US'),
+                time: now.toLocaleTimeString('en-US', { hour12: true })
+            };
+
+            if (isCloudActive) {
+                const newLogRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'officerLogs'));
+                await setDoc(newLogRef, { ...logEntry, docId: newLogRef.id });
+            } else {
+                globalOfficerLogs.push(logEntry);
+                localStorage.setItem('rotcOfficerLogs', JSON.stringify(globalOfficerLogs));
+                loadOfficerLogsTable();
+            }
+        }
+
+        function loadOfficerLogsTable() {
+            const body = document.getElementById('officerLogsTableBody');
+            if (!body) return;
+
+            const displayList = [...globalOfficerLogs].reverse();
+
+            if (displayList.length === 0) {
+                body.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-8 text-center text-tactical-textMuted uppercase font-mono">
+                            No session entries logged in the audit trail.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            body.innerHTML = displayList.map(log => {
+                const isLogin = log.action === 'LOGIN';
+                const actionBadgeClass = isLogin 
+                    ? 'bg-tactical-green bg-opacity-25 text-tactical-green border border-tactical-green' 
+                    : 'bg-tactical-gray text-tactical-textMuted border border-tactical-border';
+                return `
+                    <tr class="hover:bg-tactical-gray transition-all">
+                        <td class="py-3 px-4 font-bold text-tactical-text">${log.officerName}</td>
+                        <td class="py-3 px-4 text-tactical-khaki">${log.username}</td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${actionBadgeClass}">
+                                ${log.action}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-center font-bold text-tactical-textMuted">${log.date}</td>
+                        <td class="py-3 px-4 text-center text-tactical-green">${log.time}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function clearOfficerAuditLogs() {
+            showConfirmModal(
+                "ERASE SESSION AUDIT LOGS?",
+                "This action permanently clears the entire session history of officer logins and logouts. This cannot be undone!",
+                async () => {
+                    if (isCloudActive) {
+                        const logsSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'officerLogs'));
+                        logsSnap.forEach(async (logDoc) => {
+                            await deleteDoc(logDoc.ref);
+                        });
+                    } else {
+                        globalOfficerLogs = [];
+                        localStorage.setItem('rotcOfficerLogs', JSON.stringify([]));
+                        loadOfficerLogsTable();
+                    }
+                    showNotification("AUDIT PURGED", "Officer session logs have been cleared successfully.", "info");
+                }
+            );
+        }
+
+        function triggerDoubleConfirmWipe(mode) {
+            if (mode === 'attendance') {
+                showConfirmModal(
+                    "ERASE MUSTER HISTORIES?",
+                    "This action permanently clears ALL recorded muster attendance timestamps. Cadet registration records will remain unaffected. BACKUP IN ADVANCE!",
+                    async () => {
+                        if (isCloudActive) {
+                            const attSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'));
+                            attSnap.forEach(async (logDoc) => {
+                                await deleteDoc(logDoc.ref);
+                            });
+                        } else {
+                            globalAttendance = [];
+                            localStorage.setItem('rotcAttendance', JSON.stringify([]));
+                            updateDashboardStats();
+                            loadAttendanceTable();
+                        }
+                        showNotification("LEDGER PURGED", "Muster logs memory erased from active cache storage structures.", "info");
+                    }
+                );
+            } else if (mode === 'full') {
+                showConfirmModal(
+                    "WARNING: TOTAL SYSTEM WIPE",
+                    "THIS REVERTS ACTIVE MEMORIES TO FRESH OUT-OF-BOX CONFIGURATIONS! Erases all credentials, rosters, and attendance traces. This process cannot be undone!",
+                    async () => {
+                        if (isCloudActive) {
+                            // Delete Roster
+                            const rSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'roster'));
+                            rSnap.forEach(async (d) => await deleteDoc(d.ref));
+                            // Delete Attendance
+                            const aSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'));
+                            aSnap.forEach(async (d) => await deleteDoc(d.ref));
+                            // Delete Officer logs
+                            const oSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'officerLogs'));
+                            oSnap.forEach(async (d) => await deleteDoc(d.ref));
+                            // Reset Config
+                            const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config');
+                            await setDoc(configRef, {
+                                officerName: 'CPT. JUAN DELA CRUZ',
+                                username: 'admin',
+                                password: 'rotc123'
+                            });
+                        } else {
+                            localStorage.clear();
+                            initLocalData();
+                            setupSettingsFields();
+                            updateDashboardStats();
+                            loadAttendanceTable();
+                            loadRosterTable();
+                            loadOfficerLogsTable();
+                        }
+                        showNotification("FACTORY RESET", "System memory modules successfully wiped and pre-seeded templates activated.", "error");
+                        transitionToScreen('attendancePage');
+                    }
+                );
+            }
+        }
+
+
+        // 11. GENERAL UTILITY WINDOW POPUPS & NOTIFICATION MODULES
+        let notifTimeout = null;
+        function showNotification(title, message, type = "info") {
+            const notif = document.getElementById('systemNotification');
+            const icon = document.getElementById('notifIcon');
+            const titleEl = document.getElementById('notifTitle');
+            const msgEl = document.getElementById('notifMsg');
+
+            let bgClass = "bg-tactical-gray border-b border-tactical-border text-tactical-text";
+            let iconMarkup = "⚙️";
+
+            if (type === "success") {
+                bgClass = "bg-tactical-alertGreen text-white border-b-2 border-green-400 font-mono";
+                iconMarkup = "<i class='fa-solid fa-square-check'></i>";
+            } else if (type === "error") {
+                bgClass = "bg-tactical-alertRed text-white border-b-2 border-red-500 font-mono";
+                iconMarkup = "<i class='fa-solid fa-triangle-exclamation'></i>";
+            } else if (type === "info") {
+                bgClass = "bg-tactical-card text-tactical-green border-b-2 border-tactical-green font-mono";
+                iconMarkup = "<i class='fa-solid fa-circle-info'></i>";
+            }
+
+            notif.className = `fixed top-0 left-0 right-0 z-[100] transform transition-all duration-300 ease-in-out px-4 py-3 flex items-center justify-between shadow-2xl ${bgClass}`;
+            icon.innerHTML = iconMarkup;
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+
+            notif.classList.remove('-translate-y-full');
+
+            if (notifTimeout) clearTimeout(notifTimeout);
+            notifTimeout = setTimeout(closeNotification, 4500);
+        }
+
+        function closeNotification() {
+            const notif = document.getElementById('systemNotification');
+            notif.classList.add('-translate-y-full');
+        }
+
+        let confirmActionCallback = null;
+
+        function showConfirmModal(title, message, onConfirmCallback) {
+            const modal = document.getElementById('generalConfirmModal');
+            document.getElementById('confirmModalTitle').textContent = title;
+            document.getElementById('confirmModalMessage').textContent = message;
+            
+            confirmActionCallback = onConfirmCallback;
+
+            document.getElementById('confirmModalActionBtn').onclick = () => {
+                if (confirmActionCallback) confirmActionCallback();
+                closeConfirmModal();
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('generalConfirmModal').classList.add('hidden');
+            confirmActionCallback = null;
+        }
+
+        window.closeNotification = closeNotification;
+        window.handleIdInputChange = handleIdInputChange;
+        window.handleAttendanceSubmit = handleAttendanceSubmit;
+        window.transitionToScreen = transitionToScreen;
+        window.handleLoginSubmit = handleLoginSubmit;
+        window.handleLogout = handleLogout;
+        window.switchTab = switchTab;
+        window.loadAttendanceTable = loadAttendanceTable;
+        window.exportAttendanceCSV = exportAttendanceCSV;
+        window.confirmDeleteAttendance = confirmDeleteAttendance;
+        window.cancelCadetEdit = cancelCadetEdit;
+        window.handleCadetFormSubmit = handleCadetFormSubmit;
+        window.updateFormUnitDropdown = updateFormUnitDropdown;
+        window.startEditCadet = startEditCadet;
+        window.confirmDeleteCadet = confirmDeleteCadet;
+        window.loadRosterTable = loadRosterTable;
+        window.handleExcelImport = handleExcelImport;
+        window.exportRosterCSV = exportRosterCSV;
+        window.handleSettingsUpdate = handleSettingsUpdate;
+        window.clearOfficerAuditLogs = clearOfficerAuditLogs;
+        window.triggerDoubleConfirmWipe = triggerDoubleConfirmWipe;
+        window.closeImportPreview = closeImportPreview;
+        window.commitImportedCadets = commitImportedCadets;
+        window.closeConfirmModal = closeConfirmModal;
+
+    const connectedRef = firebase.database().ref(".info/connected");
+connectedRef.on("value", (snap) => {
+  const statusEl = document.getElementById('cloudStatusText');
+  if (snap.val() === true) {
+    statusEl.innerHTML = '<i class="fa-solid fa-cloud-check text-tactical-green"></i> CONNECTED';
+    console.log("Connected to Firebase");
+  } else {
+    statusEl.innerHTML = '<i class="fa-solid fa-cloud-arrow-up text-tactical-khaki"></i> DISCONNECTED';
+    console.warn("Disconnected from Firebase");
+  }
+});
+
+    </script>
+</body>
+</html>
